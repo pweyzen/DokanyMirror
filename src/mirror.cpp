@@ -87,6 +87,7 @@ static std::wstring QI(const std::wstring& p, __int64 v)
 static std::wstring FI(FILETIME ft)
 {
 	return L"FILETIME";
+//	return (LPCWSTR)CTime(ft).Format(L"%c");
 }
 static std::wstring FS(DWORD fileSizeHigh, DWORD fileSizeLow)
 {
@@ -131,6 +132,23 @@ CDokanyMirror* CDokanyMirror::m_pSingleton = NULL;
 static WCHAR RootDirectory[DOKAN_MAX_PATH] = L"C:";
 static WCHAR MountPoint[DOKAN_MAX_PATH] = L"M:\\";
 static WCHAR UNCName[DOKAN_MAX_PATH] = L"";
+
+__inline static DWORD AdditionalAttributeFlags(const WIN32_FIND_DATA& findData)
+{
+	if (g_Mirror()->FileAttributeRecallOnDataAccessActive())
+	{
+		if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			return FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_COMPRESSED;
+		}
+		else
+		{
+			return FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_SPARSE_FILE | FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_OFFLINE; /* | FILE_ATTRIBUTE_UNPINNED; */
+		}
+
+	}
+	return 0;
+}
 
 __inline static DWORD AdditionalAttributeFlags( const DOKAN_FILE_INFO* fi )
 {
@@ -803,7 +821,8 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
 		opened = TRUE;
 	}
 
-	if (!GetFileInformationByHandle(handle, HandleFileInformation)) {
+	if (!GetFileInformationByHandle(handle, HandleFileInformation)) 
+	{
 
 		// FileName is a root directory
 		// in this case, FindFirstFile can't get directory information
@@ -821,7 +840,7 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
 					CloseHandle(handle);
 				return DokanNtStatusFromWin32(error);
 			}
-			HandleFileInformation->dwFileAttributes = (find.dwFileAttributes | AdditionalAttributeFlags(DokanFileInfo));
+			HandleFileInformation->dwFileAttributes = (find.dwFileAttributes | AdditionalAttributeFlags(find));
 			HandleFileInformation->ftCreationTime = find.ftCreationTime;
 			HandleFileInformation->ftLastAccessTime = find.ftLastAccessTime;
 			HandleFileInformation->ftLastWriteTime = find.ftLastWriteTime;
@@ -830,6 +849,10 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
 
 			FindClose(findHandle);
 		}
+	}
+	else
+	{
+		HandleFileInformation->dwFileAttributes |= AdditionalAttributeFlags(DokanFileInfo);
 	}
 
 	ADD_COMMENT_IF_FLAG(HandleFileInformation->dwFileAttributes, FILE_ATTRIBUTE_PINNED);
@@ -875,11 +898,6 @@ static NTSTATUS DOKAN_CALLBACK MirrorGetFileInformation(
 	ADD_COMMENT_IF_FLAG(HandleFileInformation->dwFileAttributes, TREE_CONNECT_ATTRIBUTE_GLOBAL);
 	ADD_COMMENT_IF_FLAG(HandleFileInformation->dwFileAttributes, TREE_CONNECT_ATTRIBUTE_INTEGRITY);
 	ADD_COMMENT_IF_FLAG(HandleFileInformation->dwFileAttributes, TREE_CONNECT_ATTRIBUTE_PRIVACY);
-
-#define TREE_CONNECT_ATTRIBUTE_PRIVACY      0x00004000  
-#define TREE_CONNECT_ATTRIBUTE_INTEGRITY    0x00008000  
-#define TREE_CONNECT_ATTRIBUTE_GLOBAL       0x00000004  
-#define FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL  0x20000000  
 
 	ADD_COMMENT_FILETIME(L"create", HandleFileInformation->ftCreationTime);
 	ADD_COMMENT_FILETIME(L"lastAccess", HandleFileInformation->ftLastAccessTime);
@@ -931,7 +949,7 @@ MirrorFindFiles(LPCWSTR FileName,
 		{
 			g_Mirror()->AdornFilename(findData.cFileName);
 			g_Mirror()->AdornFilename(findData.cAlternateFileName);
-			findData.dwFileAttributes |= AdditionalAttributeFlags(DokanFileInfo);
+			findData.dwFileAttributes |= AdditionalAttributeFlags(findData);
 
 			FillFindData(&findData, DokanFileInfo);
 

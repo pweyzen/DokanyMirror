@@ -1,0 +1,8 @@
+﻿C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\MSBuild\15.0\Bin\Microsoft.Common.CurrentVersion.targets(1821,5): warning : The referenced project '..\..\dokan\dokan.vcxproj' does not exist.
+  stdafx.cpp
+  DokanyMirrorDlg.cpp
+  DokanyMirror.cpp
+  EventQueue.cpp
+  Generating Code...
+  mirror.cpp
+b:\git\dokanymirror\src\mirror.cpp(29): fatal error C1083: Cannot open include file: '../../dokan/dokan.h': No such file or directory
